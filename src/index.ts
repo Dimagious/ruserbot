@@ -17,24 +17,36 @@ bot.use(session({ initial: (): MySession => ({ mode: "sr" }) }));
 // helper: build inline keyboard with active mark
 function buildModeKeyboard(current: TargetLang) {
     const kb = new InlineKeyboard();
-    kb.text(current === "sr" ? "Сербский ✅" : "Сербский", "mode:sr");
-    kb.text(current === "en" ? "Английский ✅" : "Английский", "mode:en");
+    const sr = current === "sr" ? "🇷🇸 Сербский ✅" : "🇷🇸 Сербский";
+    const en = current === "en" ? "🇬🇧 Английский ✅" : "🇬🇧 Английский";
+    kb.text(sr, "mode:sr");
+    kb.text(en, "mode:en");
     return kb;
 }
 
 // commands
 bot.command("start", async (ctx) => {
     await ctx.reply(
-        `Привет! Я перевожу с русского.\nВыбери режим перевода:\nТекущий: ${ctx.session.mode === "sr" ? "Сербский" : "Английский"}`,
+        `Привет! Я перевожу с русского.\nВыбери режим перевода или используй /sr и /en.\nТекущий: ${ctx.session.mode === "sr" ? "Сербский" : "Английский"}`,
         { reply_markup: buildModeKeyboard(ctx.session.mode) }
     );
 });
 
 bot.command("mode", async (ctx) => {
     await ctx.reply(
-        `Текущий режим: ${ctx.session.mode === "sr" ? "Сербский" : "Английский"}`,
+        `Текущий режим: ${ctx.session.mode === "sr" ? "Сербский" : "Английский"}\n(быстрые команды: /sr /en)`,
         { reply_markup: buildModeKeyboard(ctx.session.mode) }
     );
+});
+
+bot.command("sr", async (ctx) => {
+    ctx.session.mode = "sr";
+    await ctx.reply("Режим: Сербский", { reply_markup: buildModeKeyboard("sr") });
+});
+
+bot.command("en", async (ctx) => {
+    ctx.session.mode = "en";
+    await ctx.reply("Режим: Английский", { reply_markup: buildModeKeyboard("en") });
 });
 
 // handle mode switch
