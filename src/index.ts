@@ -32,7 +32,19 @@ function buildModeKeyboard(current: TargetLang) {
 function buildTranslationKeyboard() {
     const kb = new InlineKeyboard();
     kb.text("📋 Копировать", "copy");
-    kb.text("🔄 Перевести ещё раз", "retranslate");
+    kb.text("🔄 Перевести ещё раз", "retranslate_menu");
+    return kb;
+}
+
+// helper: build keyboard for retranslate with language selection
+function buildRetranslateKeyboard(currentMode: TargetLang) {
+    const kb = new InlineKeyboard();
+    const sr = currentMode === "sr" ? "🇷🇸 Сербский ✅" : "🇷🇸 Сербский";
+    const en = currentMode === "en" ? "🇬🇧 Английский ✅" : "🇬🇧 Английский";
+    kb.text(sr, "retranslate:sr");
+    kb.text(en, "retranslate:en");
+    kb.row();
+    kb.text("✏️ Ввести новый текст", "retranslate:new");
     return kb;
 }
 
@@ -116,15 +128,35 @@ bot.callbackQuery("copy", async (ctx) => {
     }
 });
 
-// handle retranslate button
-bot.callbackQuery("retranslate", async (ctx) => {
+// handle retranslate menu button - show language selection
+bot.callbackQuery("retranslate_menu", async (ctx) => {
+    const originalText = ctx.session.lastOriginalText;
+    if (!originalText) {
+        await ctx.answerCallbackQuery({ text: "❌ Нет текста для перевода" });
+        return;
+    }
+    
+    const currentMode = ctx.session.mode ?? "sr";
+    await ctx.answerCallbackQuery({ text: "Выберите язык для перевода" });
+    await ctx.reply(
+        `🔄 Перевести ещё раз\n\n` +
+        `Последний текст: "${originalText.substring(0, 50)}${originalText.length > 50 ? '...' : ''}"\n\n` +
+        `Выберите язык или введите новый текст:`,
+        { reply_markup: buildRetranslateKeyboard(currentMode) }
+    );
+});
+
+// handle retranslate with selected language
+bot.callbackQuery(/^retranslate:(sr|en)$/, async (ctx) => {
     try {
         const originalText = ctx.session.lastOriginalText;
         if (!originalText) {
             await ctx.answerCallbackQuery({ text: "❌ Нет текста для перевода" });
             return;
         }
-        const target = ctx.session.mode ?? "sr";
+        
+        const target = ctx.match[1] as TargetLang;
+        ctx.session.mode = target; // обновляем режим
         
         await ctx.answerCallbackQuery({ text: "🔄 Перевожу..." });
         if (ctx.chat) {
@@ -147,6 +179,17 @@ bot.callbackQuery("retranslate", async (ctx) => {
             await ctx.reply("⚠️ Не удалось перевести. Попробуйте ещё раз.");
         }
     }
+});
+
+// handle "enter new text" button
+bot.callbackQuery("retranslate:new", async (ctx) => {
+    await ctx.answerCallbackQuery({ text: "Введите новый текст для перевода" });
+    await ctx.reply(
+        `✏️ Введите новый текст на русском языке для перевода.\n\n` +
+        `Текущий режим: ${ctx.session.mode === "sr" ? "Сербский" : "Английский"}\n` +
+        `Используйте /sr или /en для смены режима.`,
+        { reply_markup: buildModeKeyboard(ctx.session.mode) }
+    );
 });
 
 // main translation
