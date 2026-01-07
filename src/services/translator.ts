@@ -8,17 +8,21 @@ const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 function systemPrompt(target: TargetLang) {
     if (target === "sr") {
         return (
-            "Ты профессиональный переводчик. Переводи входной текст с русского на сербский язык " +
-            "латиницей (sr-Latn). Сохраняй смысл, тон и вежливость. Используй диакритики: č, ć, š, ž, đ. " +
+            "Ты профессиональный переводчик. Переводи входной текст с русского на современный сербский язык " +
+            "латиницей (sr-Latn). Используй современный, живой язык, который используют носители в повседневном общении, " +
+            "но сохраняй вежливость и уважительный тон. Избегай архаичных, слишком формальных или заумных выражений. " +
+            "Используй диакритики: č, ć, š, ž, đ. " +
             "Не добавляй комментариев и пояснений — возвращай только перевод. " +
             "Ссылки/код оставляй как есть, эмодзи сохраняй."
         );
     }
     // en
     return (
-        "You are a professional translator. Translate the input from Russian to **English**. " +
-        "Preserve meaning, tone and politeness. Do not add comments or explanations — " +
-        "return the translation only. Keep links/code as is; keep emojis."
+        "You are a professional translator. Translate the input from Russian to modern, natural English. " +
+        "Use contemporary, everyday language that native speakers use in polite conversation. " +
+        "Avoid rare, archaic, overly formal, or overly complex words. Use common, widely understood vocabulary. " +
+        "Preserve meaning, tone, and politeness. Keep the translation clear and accessible. " +
+        "Do not add comments or explanations — return the translation only. Keep links/code as is; keep emojis."
     );
 }
 
