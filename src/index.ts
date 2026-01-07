@@ -5,7 +5,11 @@ import { translate, type TargetLang } from "./services/translator.js";
 import { logger } from "./logger.js";
 
 // ---- session typings
-type MySession = { mode: TargetLang };
+type MySession = { 
+    mode: TargetLang;
+    lastOriginalText?: string; // для кнопки "Перевести ещё раз"
+    lastTranslatedText?: string; // для кнопки "Копировать"
+};
 type MyContext = Context & SessionFlavor<MySession>;
 
 // ---- bot
@@ -21,6 +25,14 @@ function buildModeKeyboard(current: TargetLang) {
     const en = current === "en" ? "🇬🇧 Английский ✅" : "🇬🇧 Английский";
     kb.text(sr, "mode:sr");
     kb.text(en, "mode:en");
+    return kb;
+}
+
+// helper: build keyboard for translation result
+function buildTranslationKeyboard() {
+    const kb = new InlineKeyboard();
+    kb.text("📋 Копировать", "copy");
+    kb.text("🔄 Перевести ещё раз", "retranslate");
     return kb;
 }
 
@@ -49,6 +61,36 @@ bot.command("en", async (ctx) => {
     await ctx.reply("Режим: Английский", { reply_markup: buildModeKeyboard("en") });
 });
 
+bot.command("help", async (ctx) => {
+    const helpText = `
+📖 *Справка по командам*
+
+*Основные команды:*
+/start - Начать работу с ботом
+/help - Показать эту справку
+/mode - Показать текущий режим перевода
+
+*Переключение режимов:*
+/sr - Переключить на сербский язык
+/en - Переключить на английский язык
+
+*Как использовать:*
+1. Выберите режим перевода (/sr или /en)
+2. Отправьте текст на русском языке
+3. Получите перевод с кнопками для удобной работы
+
+*Подсказки:*
+• Используйте кнопки под переводом для копирования или повторного перевода
+• Режим перевода сохраняется между сообщениями
+• Бот переводит только текстовые сообщения
+    `.trim();
+    
+    await ctx.reply(helpText, { 
+        parse_mode: "Markdown",
+        reply_markup: buildModeKeyboard(ctx.session.mode)
+    });
+});
+
 // handle mode switch
 bot.callbackQuery(/^mode:(sr|en)$/, async (ctx) => {
     const m = (ctx.match[1] as TargetLang);
@@ -56,6 +98,55 @@ bot.callbackQuery(/^mode:(sr|en)$/, async (ctx) => {
     // update buttons and toast
     await ctx.editMessageReplyMarkup({ reply_markup: buildModeKeyboard(m) }).catch(() => { });
     await ctx.answerCallbackQuery({ text: m === "sr" ? "Режим: Сербский" : "Режим: Английский" });
+});
+
+// handle copy button
+bot.callbackQuery("copy", async (ctx) => {
+    try {
+        const translatedText = ctx.session.lastTranslatedText;
+        if (!translatedText) {
+            await ctx.answerCallbackQuery({ text: "❌ Нет текста для копирования" });
+            return;
+        }
+        await ctx.answerCallbackQuery({ text: "📋 Текст скопирован" });
+        await ctx.reply(`\`\`\`\n${translatedText}\n\`\`\``, { parse_mode: "Markdown" });
+    } catch (e) {
+        logger.error(e);
+        await ctx.answerCallbackQuery({ text: "❌ Ошибка при копировании" });
+    }
+});
+
+// handle retranslate button
+bot.callbackQuery("retranslate", async (ctx) => {
+    try {
+        const originalText = ctx.session.lastOriginalText;
+        if (!originalText) {
+            await ctx.answerCallbackQuery({ text: "❌ Нет текста для перевода" });
+            return;
+        }
+        const target = ctx.session.mode ?? "sr";
+        
+        await ctx.answerCallbackQuery({ text: "🔄 Перевожу..." });
+        if (ctx.chat) {
+            await ctx.api.sendChatAction(ctx.chat.id, "typing");
+        }
+        
+        const translated = await translate(originalText, target);
+        // сохраняем тексты в сессии для кнопок
+        ctx.session.lastOriginalText = originalText;
+        ctx.session.lastTranslatedText = translated;
+        await ctx.reply(translated, { 
+            reply_markup: buildTranslationKeyboard()
+        });
+    } catch (e: any) {
+        logger.error(e);
+        await ctx.answerCallbackQuery({ text: "❌ Ошибка при переводе" });
+        if (e?.code === "unsupported_country_region_territory" || e?.status === 403) {
+            await ctx.reply("⚠️ Перевод временно недоступен (ограничения провайдера по региону).");
+        } else {
+            await ctx.reply("⚠️ Не удалось перевести. Попробуйте ещё раз.");
+        }
+    }
 });
 
 // main translation
@@ -71,7 +162,12 @@ bot.on("message:text", async (ctx) => {
     try {
         const target = ctx.session.mode ?? "sr";
         const translated = await translate(text, target);
-        await ctx.reply(translated);
+        // сохраняем тексты в сессии для кнопок
+        ctx.session.lastOriginalText = text;
+        ctx.session.lastTranslatedText = translated;
+        await ctx.reply(translated, { 
+            reply_markup: buildTranslationKeyboard()
+        });
     } catch (e: any) {
         // дружелюбные сообщения об ошибках
         if (e?.code === "unsupported_country_region_territory" || e?.status === 403) {
